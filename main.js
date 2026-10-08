@@ -4,6 +4,137 @@
   var me = document.currentScript;
   var ICONS = me ? me.src.replace(/main\.js.*$/, 'ikony.svg') : '/assets/img/ikony.svg';
 
+  /* ---------- Súhlas s cookies a meranie ---------- */
+  var CFG = window.TRK || {};
+  var KEY = 'trk_consent', VER = 1, MAX_AGE = 365 * 24 * 3600 * 1000;
+  var loaded = {};
+  function readConsent() {
+    try {
+      var c = JSON.parse(localStorage.getItem(KEY));
+      if (c && c.v === VER && Date.now() - c.t < MAX_AGE) return c;
+    } catch (e) { }
+    return null;
+  }
+  function addScript(src) {
+    var s = document.createElement('script');
+    s.async = true; s.src = src;
+    document.head.appendChild(s);
+  }
+  function clearCookies() {
+    var host = location.hostname.replace(/^www\./, '');
+    document.cookie.split(';').forEach(function (c) {
+      var name = c.split('=')[0].trim();
+      if (/^(_ga|_gid|_gcl|_cl|_fbp|CLID|MUID)/.test(name)) {
+        ['', '; domain=' + host, '; domain=.' + host, '; domain=' + location.hostname].forEach(function (d) {
+          document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/' + d;
+        });
+      }
+    });
+  }
+  function loadMaps() {
+    document.querySelectorAll('[data-map-src]').forEach(function (m) {
+      if (m.querySelector('iframe')) return;
+      var f = document.createElement('iframe');
+      f.src = m.getAttribute('data-map-src');
+      f.title = m.getAttribute('data-map-title') || 'Mapa';
+      f.loading = 'lazy';
+      f.referrerPolicy = 'no-referrer-when-downgrade';
+      m.innerHTML = '';
+      m.appendChild(f);
+    });
+  }
+  function applyConsent(c) {
+    var g = function (v) { return v ? 'granted' : 'denied'; };
+    window.gtag('consent', 'update', { analytics_storage: g(c.a), ad_storage: g(c.m), ad_user_data: g(c.m), ad_personalization: g(c.m) });
+    if ((c.a && CFG.ga4) || (c.m && CFG.ads)) {
+      if (!loaded.gtag) { loaded.gtag = 1; addScript('https://www.googletagmanager.com/gtag/js?id=' + (CFG.ga4 || CFG.ads)); window.gtag('js', new Date()); }
+      if (c.a && CFG.ga4 && !loaded.ga4) { loaded.ga4 = 1; window.gtag('config', CFG.ga4, { cookie_expires: 34128000 }); }
+      if (c.m && CFG.ads && !loaded.ads) { loaded.ads = 1; window.gtag('config', CFG.ads); }
+    }
+    if (c.a && CFG.clarity && !loaded.clarity) {
+      loaded.clarity = 1;
+      window.clarity = window.clarity || function () { (window.clarity.q = window.clarity.q || []).push(arguments); };
+      addScript('https://www.clarity.ms/tag/' + CFG.clarity);
+    }
+    if (loaded.clarity) window.clarity('consentv2', { ad_Storage: g(c.m), analytics_Storage: g(c.a) });
+    if (c.m && CFG.pixel && !loaded.pixel) {
+      loaded.pixel = 1;
+      var n = window.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
+      if (!window._fbq) window._fbq = n;
+      n.push = n; n.loaded = true; n.version = '2.0'; n.queue = [];
+      addScript('https://connect.facebook.net/en_US/fbevents.js');
+      window.fbq('init', CFG.pixel); window.fbq('track', 'PageView');
+    }
+    if (c.m) loadMaps();
+  }
+  function saveConsent(a, m) {
+    var prev = readConsent();
+    var c = { v: VER, a: !!a, m: !!m, t: Date.now() };
+    try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { }
+    if (prev && ((prev.a && !c.a) || (prev.m && !c.m))) { clearCookies(); location.reload(); return; }
+    applyConsent(c);
+  }
+  window.trkTrack = function (name, params) {
+    if (loaded.ga4 || loaded.ads) window.gtag('event', name, params || {});
+    if (loaded.clarity) window.clarity('event', name);
+  };
+
+  var cc = null;
+  function privacyHref() {
+    var a = document.querySelector('a[href*="ochrana-osobnych-udajov"]');
+    return a ? a.getAttribute('href') : '/ochrana-osobnych-udajov';
+  }
+  function closeBanner() { if (cc) { cc.remove(); cc = null; } }
+  function openBanner(settings) {
+    closeBanner();
+    var c = readConsent() || { a: false, m: false };
+    cc = document.createElement('section');
+    cc.className = 'cc';
+    cc.setAttribute('role', 'dialog');
+    cc.setAttribute('aria-labelledby', 'cc-h');
+    cc.innerHTML =
+      '<h2 id="cc-h">Cookies na tomto webe</h2>' +
+      '<p>Nevyhnutné cookies potrebujeme na fungovanie webu. S vaším súhlasom použijeme aj analytické – aby sme vedeli, ktoré stránky vás zaujímajú a čo na webe zlepšiť – a marketingové na meranie reklám a zobrazenie mapy. <a href="' + privacyHref() + '#cookies">Viac o cookies</a></p>' +
+      '<div class="cc__opts"' + (settings ? '' : ' hidden') + '>' +
+        '<label class="cc__opt"><input type="checkbox" checked disabled><span><strong>Nevyhnutné</strong>Zabezpečujú fungovanie webu a zapamätanie vašej voľby. Sú vždy zapnuté.</span></label>' +
+        '<label class="cc__opt"><input type="checkbox" name="a"' + (c.a ? ' checked' : '') + '><span><strong>Analytické</strong>Google Analytics a Microsoft Clarity – štatistiky návštevnosti, mapy kliknutí a anonymizované nahrávky návštev.</span></label>' +
+        '<label class="cc__opt"><input type="checkbox" name="m"' + (c.m ? ' checked' : '') + '><span><strong>Marketingové a obsah tretích strán</strong>Meranie reklám (Google Ads, Meta) a mapa Google Maps.</span></label>' +
+      '</div>' +
+      '<div class="cc__btns">' +
+        '<button class="btn btn--red" type="button" data-cc="all">Prijať všetko</button>' +
+        '<button class="btn btn--ink" type="button" data-cc="none">Odmietnuť</button>' +
+        (settings ? '<button class="btn btn--ghost cc__wide" type="button" data-cc="save">Uložiť môj výber</button>'
+                  : '<button class="cc__more" type="button" data-cc="settings">Nastaviť podrobne</button>') +
+      '</div>';
+    document.body.appendChild(cc);
+    cc.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-cc]');
+      if (!b) return;
+      var act = b.getAttribute('data-cc');
+      if (act === 'settings') { openBanner(true); return; }
+      if (act === 'all') saveConsent(true, true);
+      if (act === 'none') saveConsent(false, false);
+      if (act === 'save') saveConsent(cc.querySelector('[name=a]').checked, cc.querySelector('[name=m]').checked);
+      closeBanner();
+    });
+    var first = cc.querySelector(settings ? '[name=a]' : '[data-cc=all]');
+    if (first && settings) first.focus();
+  }
+  var current = readConsent();
+  if (current) applyConsent(current); else openBanner(false);
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('.cc-open')) { e.preventDefault(); openBanner(true); }
+    var ml = e.target.closest('[data-map-load]');
+    if (ml) { e.preventDefault(); loadMaps(); }
+    var a = e.target.closest('a, button');
+    if (!a || a.closest('.cc')) return;
+    var href = a.getAttribute('href') || '';
+    var label = (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (href.indexOf('tel:') === 0) window.trkTrack('click_phone', { link_text: label });
+    else if (href.indexOf('mailto:') === 0) window.trkTrack('click_email', { link_text: label });
+    else if (a.classList.contains('btn--red')) window.trkTrack('click_cta', { link_text: label, link_url: href });
+  });
+
   /* ---------- Mobilné menu ---------- */
   var menuBtn = document.querySelector('.hdr__menu');
   var nav = document.getElementById('nav');
@@ -92,6 +223,7 @@
         items = btns;
         show(i);
         if (typeof lb.showModal === 'function') lb.showModal(); else lb.setAttribute('open', '');
+        window.trkTrack('gallery_open', { image_index: i + 1 });
       });
     });
   });
@@ -164,7 +296,7 @@
       }
     }
     input.addEventListener('input', function () { show(false); });
-    input.addEventListener('change', function () { show(true); });
+    input.addEventListener('change', function () { show(true); window.trkTrack('obec_check', { obec: input.value.trim(), found: /is-yes/.test(res.className) }); });
     box.addEventListener('submit', function (e) { e.preventDefault(); show(true); });
   });
 
@@ -192,7 +324,7 @@
           form.reset();
           status.textContent = 'Ďakujeme, dopyt sme prijali. Ozveme sa vám najneskôr do 48 hodín s cenovou ponukou.';
           status.classList.add('is-ok');
-          if (typeof window.gtag === 'function') window.gtag('event', 'generate_lead', { form_location: form.getAttribute('data-ajax') });
+          window.trkTrack('generate_lead', { form_location: form.getAttribute('data-ajax') });
           if (typeof window.fbq === 'function') window.fbq('track', 'Lead');
         })
         .catch(function () {
