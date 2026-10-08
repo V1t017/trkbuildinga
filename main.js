@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var me = document.currentScript;
-  var ICONS = me ? me.src.replace(/js\/main\.js.*$/, 'img/ikony.svg') : '/assets/img/ikony.svg';
+  var ICONS = me ? me.src.replace(/main\.js.*$/, 'ikony.svg') : '/assets/img/ikony.svg';
 
   /* ---------- Mobilné menu ---------- */
   var menuBtn = document.querySelector('.hdr__menu');
