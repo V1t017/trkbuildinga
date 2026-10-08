@@ -121,6 +121,60 @@
     });
   }
 
+
+  /* ---------- Overenie obce ---------- */
+  function norm(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); }
+  function svgIcon(id) { return '<svg class="ico" aria-hidden="true"><use href="' + ICONS + '#' + id + '"/></svg>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  document.querySelectorAll('[data-obec-check]').forEach(function (box) {
+    var input = box.querySelector('input');
+    var res = box.querySelector('.oc__result');
+    var msg = box.querySelector('.oc__msg');
+    var cta = box.querySelector('.oc__cta');
+    var base = cta.getAttribute('href').split('?')[0];
+    var opts = Array.prototype.map.call(document.getElementById(input.getAttribute('list')).options, function (o) {
+      return { v: o.value, n: norm(o.value), obec: o.getAttribute('data-obec'), okres: o.getAttribute('data-okres') };
+    });
+    function find(q) {
+      var exact = opts.filter(function (o) { return o.n === q; })[0];
+      if (exact) return exact;
+      var pref = opts.filter(function (o) { return o.n.indexOf(q) === 0; });
+      return pref.length === 1 ? pref[0] : null;
+    }
+    function show(final) {
+      var q = norm(input.value);
+      res.className = 'oc__result';
+      if (q.length < 2) return;
+      var hit = find(q);
+      if (!hit && !final && q.length < 4) return;
+      if (!hit && !final && opts.some(function (o) { return o.n.indexOf(q) === 0; })) return;
+      if (hit) {
+        var isPart = hit.obec !== hit.v;
+        var head = isPart ? 'Áno, v lokalite ' + esc(hit.v) + ' staviame.' : 'Áno, v obci ' + esc(hit.v) + ' staviame.';
+        var where = isPart ? 'Patrí pod obec ' + esc(hit.obec) + ', okres ' + esc(hit.okres) + '.' : 'Okres ' + esc(hit.okres) + '.';
+        msg.innerHTML = svgIcon('i-check') + '<span><strong>' + head + '</strong>' + where +
+          ' Pošlite nám dopyt a nezáväznú cenovú ponuku vám pripravíme do 48 hodín.</span>';
+        cta.href = base + '?obec=' + encodeURIComponent(hit.v);
+        res.className = 'oc__result is-yes';
+      } else {
+        msg.innerHTML = svgIcon('i-pin') + '<span><strong>Túto obec v zozname nemáme.</strong>Skontrolujte, prosím, názov. ' +
+          'Ak staviate mimo Liptova a Oravy, po dohode prídeme aj k vám – napíšte nám, kde staviate.</span>';
+        cta.href = base + '?obec=' + encodeURIComponent(input.value.trim());
+        res.className = 'oc__result is-no';
+      }
+    }
+    input.addEventListener('input', function () { show(false); });
+    input.addEventListener('change', function () { show(true); });
+    box.addEventListener('submit', function (e) { e.preventDefault(); show(true); });
+  });
+
+  /* ---------- Predvyplnenie miesta stavby z odkazu ---------- */
+  var mObec = /[?&]obec=([^&]+)/.exec(location.search);
+  if (mObec) {
+    var place = document.querySelector('input[name="miesto_vystavby"]');
+    if (place && !place.value) place.value = decodeURIComponent(mObec[1].replace(/\+/g, ' '));
+  }
+
   /* ---------- Formuláre (Formspree) ---------- */
   document.querySelectorAll('form[data-ajax]').forEach(function (form) {
     form.addEventListener('submit', function (e) {
